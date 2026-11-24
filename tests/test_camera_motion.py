@@ -13,7 +13,7 @@ def test_live_camera_motion_toggle_pause_navigation_and_disconnect(monkeypatch):
     cam.entry = SimpleNamespace(entry_id="album")
     unsubscribe = Mock()
     cam._viewers = SimpleNamespace(async_add_stream=lambda entry_id: unsubscribe)
-    cam.store = SimpleNamespace(ken_burns=False, paused=False, slide_interval=10)
+    cam.store = SimpleNamespace(ken_burns=False, paused=False, slide_interval=10, pause_when_unwatched=False)
     cam.frame_interval = 0.5
     cam.content_type = "image/jpeg"
     cam._last_video = None
@@ -65,3 +65,17 @@ def test_live_camera_motion_toggle_pause_navigation_and_disconnect(monkeypatch):
     unsubscribe.assert_called_once()
     assert cam._motion_viewers == 0
     assert cam._motion_source is None
+
+def test_family_hub_screensaver_poll_counts_as_a_viewer():
+    cam = object.__new__(camera.AlbumSlideshowCamera)
+    cam.store = SimpleNamespace(pause_when_unwatched=True)
+    cam.entry = SimpleNamespace(entry_id="album")
+    cam._viewers = Mock()
+    cam._framebuffer = b"current photo"
+    for query in ({}, {"frame": "1"}, {"frame": "1", "fhts": "1234"}):
+        token = camera.current_request.set(SimpleNamespace(query=query))
+        try:
+            assert asyncio.run(cam.async_camera_image()) == b"current photo"
+        finally:
+            camera.current_request.reset(token)
+    cam._viewers.async_heartbeat.assert_called_once_with("album")

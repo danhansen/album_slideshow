@@ -21,6 +21,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.http import current_request
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -996,6 +997,11 @@ class AlbumSlideshowCamera(Camera):
         self.async_write_ha_state()
 
     async def async_camera_image(self, width: int | None = None, height: int | None = None) -> bytes | None:
+        if self.store.pause_when_unwatched:
+            # Family Hub adds fhts to the snapshot URL on each screensaver poll.
+            request = current_request.get()
+            if request is not None and "fhts" in request.query:
+                self._viewers.async_heartbeat(self.entry.entry_id)
         return self._framebuffer
 
     async def _live_image(self) -> bytes | None:

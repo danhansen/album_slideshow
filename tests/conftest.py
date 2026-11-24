@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import sys
 import types
+from contextvars import ContextVar
 
 
 def _make_stub(*names: str) -> None:
@@ -31,10 +32,14 @@ _make_stub(
     "homeassistant.helpers.entity_platform",
     "homeassistant.helpers.entity_registry",
     "homeassistant.helpers.selector",
+    "homeassistant.helpers.http",
     "homeassistant.helpers.storage",
     "homeassistant.helpers.update_coordinator",
     "async_timeout",
 )
+
+import homeassistant.helpers.http as _helpers_http
+_helpers_http.current_request = ContextVar("current_request", default=None)
 
 import homeassistant.components.camera as _cam
 _cam.Camera = object  # type: ignore[attr-defined]

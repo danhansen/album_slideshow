@@ -138,7 +138,8 @@ open. Turn on **Pause when not viewed** to stop that:
 - A card in a background browser tab, a closed app, or a device whose screen is
   locked doesn't count. A dimmed screen or a kiosk screensaver drawn over the
   page still counts, because the page is still visible to the browser.
-- Plain camera snapshots don't count (for example, a picture card that isn't
+- Family Hub’s screensaver checks in each time it fetches a camera snapshot.
+- Other plain camera snapshots don't count (for example, a picture card that isn't
   in live mode, or something casting the camera image). Leave the setting off
   if those are how you show the slideshow.
 - It doesn't change the **Pause slideshow** switch. Previous and Next still
