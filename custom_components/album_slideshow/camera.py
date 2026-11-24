@@ -27,6 +27,7 @@ from .const import (
     DOMAIN,
     CAMERA_METADATA_FIELDS,
     DATE_FILTER_OFF,
+    DATE_FILTER_ON_THIS_DAY,
     DEFAULT_CUSTOM_LOOKBACK_DAYS,
     DEFAULT_SHUFFLE_AGE_BIAS,
     DEFAULT_MISSING_DATE_MODE,
@@ -736,10 +737,15 @@ class AlbumSlideshowCamera(Camera):
         if self._effective_cache is not None and self._effective_cache[0] == hash(cache_key):
             return self._effective_cache[1]
 
+        mode = self.store.date_filter
+        if data.get("memories_date") and mode == DATE_FILTER_ON_THIS_DAY:
+            if data["memories_date"] != datetime.now(tz).date():
+                return []
+            mode = DATE_FILTER_OFF  # Memories already matched the photo's indexed calendar day.
         filtered = playlist.filter_items(
             [item for item in raw if item.photo_id and item.photo_id not in self.store.hidden_photo_ids]
             if self.store.hidden_photo_ids else raw,
-            mode=self.store.date_filter,
+            mode=mode,
             lookback_days=getattr(self.store, "custom_lookback_days", DEFAULT_CUSTOM_LOOKBACK_DAYS),
             missing_date=self.store.missing_date_mode,
             tz=tz,

@@ -322,3 +322,21 @@ def test_memories_private_timeline(monkeypatch):
             assert [row["fileid"] async for row in client.timeline()] == [3]
 
     asyncio.run(run())
+
+
+def test_memories_anniversary_queries_only_prior_matching_days(monkeypatch):
+    import asyncio
+    from datetime import date, timedelta
+
+    client = nc.MemoriesClient(None, "https://cloud.example.com", "alice", "app", "")
+    async def rows(path, *, day_ids):
+        assert path == "days"
+        dates = [date(1970, 1, 1) + timedelta(days=i) for i in day_ids]
+        assert dates[0] == date(2020, 2, 29)
+        assert all(d.month == 2 and d.day == 29 and d.year < 2024 for d in dates)
+        return [{"fileid": 4, "mimetype": "image/jpeg"}, {"fileid": 5, "isvideo": 1}]
+    monkeypatch.setattr(client, "_rows", rows)
+
+    async def run():
+        assert [r["fileid"] async for r in client.timeline(date(2024, 2, 29))] == [4]
+    asyncio.run(run())

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
+from homeassistant.util import dt as dt_util
 from hashlib import sha256
 import json
 import logging
@@ -89,6 +90,7 @@ from .const import (
     CONF_NEXTCLOUD_IMAGE_SIZE,
     CONF_NEXTCLOUD_SHARE_TOKEN,
     CONF_NEXTCLOUD_AUTH_MODE,
+    DATE_FILTER_ON_THIS_DAY,
     NEXTCLOUD_AUTH_MODE_MEMORIES,
     NEXTCLOUD_AUTH_MODE_PUBLIC,
     DEFAULT_NEXTCLOUD_AUTH_MODE,
@@ -1312,10 +1314,22 @@ class AlbumCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(hours=int(store.refresh_hours)),
         )
 
+        was_anniversary = self.memories_anniversary
+
         def _on_store_change() -> None:
+            nonlocal was_anniversary
+            if self.memories_anniversary != was_anniversary:
+                was_anniversary = self.memories_anniversary
+                hass.async_create_task(self.async_request_refresh())
             self.update_interval = timedelta(hours=int(self.store.refresh_hours))
 
         store.add_listener(_on_store_change)
+
+    @property
+    def memories_anniversary(self) -> bool:
+        return (self.provider == PROVIDER_NEXTCLOUD
+                and self.entry.data.get(CONF_NEXTCLOUD_AUTH_MODE) == NEXTCLOUD_AUTH_MODE_MEMORIES
+                and self.store.date_filter == DATE_FILTER_ON_THIS_DAY)
 
     async def _async_update_data(self) -> dict[str, Any]:
         # Cancel any in-flight enrichment from a previous interval before
@@ -1347,6 +1361,8 @@ class AlbumCoordinator(DataUpdateCoordinator):
             else:
                 raise UpdateFailed(f"Unsupported provider: {self.provider}")
         except UpdateFailed:
+            if self.memories_anniversary:
+                raise
             cached = await self._load_cached_items()
             if cached and cached.get("items"):
                 _LOGGER.info(
@@ -1399,6 +1415,9 @@ class AlbumCoordinator(DataUpdateCoordinator):
                 )
             await self._relabel_from_place_cache(items)
             self._schedule_enrichment(data)
+
+        if data.get("memories_date"):
+            return data  # A daily result must not replace or restore the full timeline cache.
 
         if items:
             # Only persist non-empty results so we never overwrite a good
@@ -2491,7 +2510,8 @@ class AlbumCoordinator(DataUpdateCoordinator):
             data[CONF_NEXTCLOUD_USERNAME], data[CONF_NEXTCLOUD_PASSWORD], "")
         items = []
         try:
-            async for row in client.timeline():
+            today = datetime.now(dt_util.DEFAULT_TIME_ZONE).date() if self.memories_anniversary else None
+            async for row in client.timeline(today):
                 file_id = int(row["fileid"])
                 items.append(MediaItem(
                     url=nc_api.build_preview_url(client.base_url, file_id, NEXTCLOUD_PREVIEW_PX),
@@ -2503,7 +2523,7 @@ class AlbumCoordinator(DataUpdateCoordinator):
         except Exception as err:
             raise UpdateFailed(f"Error listing Nextcloud Memories: {err}") from err
         self.image_request_headers = dict(client.image_headers)
-        return {"title": self.entry.title, "items": items}
+        return {"title": self.entry.title, "items": items, "memories_date": today}
 
     def _ente_share(self):
         """Rebuild the parsed share (token + collection key) from entry data."""

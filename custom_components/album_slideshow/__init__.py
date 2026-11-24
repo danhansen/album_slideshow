@@ -478,6 +478,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     store.settings_restored = asyncio.Event()
     coordinator = AlbumCoordinator(hass, entry, store)
     await coordinator.async_config_entry_first_refresh()
+    from .const import CONF_NEXTCLOUD_AUTH_MODE, NEXTCLOUD_AUTH_MODE_MEMORIES
+
+    if entry.data.get(CONF_NEXTCLOUD_AUTH_MODE) == NEXTCLOUD_AUTH_MODE_MEMORIES:
+        from homeassistant.helpers.event import async_track_time_change
+
+        async def refresh_anniversary(now):
+            if coordinator.memories_anniversary:
+                await coordinator.async_request_refresh()
+
+        entry.async_on_unload(async_track_time_change(
+            hass, refresh_anniversary, hour=0, minute=0, second=0
+        ))
 
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,

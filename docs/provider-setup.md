@@ -759,3 +759,10 @@ The camera uses Nextcloud previews of still photos from the account's indexed
 Memories timeline. Refreshes list timeline days and fetch their metadata in
 batches, up to 20,000 photos. The slideshow's date filters use the capture times
 returned by Memories. This source skips videos and does not scan originals for EXIF.
+
+For a daily anniversary slideshow set the camera's **Date filter** to
+**on_this_day**. In Memories timeline mode this requests still photos directly
+from the Memories days API for the same month and day in the previous 120
+years. The date follows Home Assistant's time zone and refreshes at midnight.
+No matching photos means an empty playlist for that date. Switch the filter
+back to **off** to restore the full timeline.

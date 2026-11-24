@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import base64
 import email.utils
+from datetime import date
 import re
 from typing import Any
 from urllib.parse import quote, unquote, urlparse
@@ -281,12 +282,15 @@ class NextcloudClient:
 class MemoriesClient(NextcloudClient):
     """Read the account's indexed timeline using its Nextcloud app password."""
 
-    async def _rows(self, path: str) -> list[dict[str, Any]]:
+    async def _rows(self, path: str, *, day_ids: list[int] | None = None) -> list[dict[str, Any]]:
         session = async_get_clientsession(self.hass)
         url = f"{self.base_url}/index.php/apps/memories/api/{path}"
         headers = {**self.image_headers, "OCS-APIRequest": "true", "Accept": "application/json"}
         async with async_timeout.timeout(_TIMEOUT):
-            async with session.get(url, headers=headers, allow_redirects=False) as response:
+            request = (session.get(url, headers=headers, allow_redirects=False)
+                       if day_ids is None else
+                       session.post(url, json={"dayIds": day_ids}, headers=headers, allow_redirects=False))
+            async with request as response:
                 response.raise_for_status()
                 rows = await response.json()
         if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
@@ -296,12 +300,28 @@ class MemoriesClient(NextcloudClient):
     async def day_ids(self) -> list[int]:
         return [int(row["dayid"]) for row in await self._rows("days?nopreload=1")]
 
-    async def timeline(self):
-        days = await self.day_ids()
+    async def timeline(self, anniversary: date | None = None):
+        if anniversary is not None:
+            # Memories day IDs encode the calendar date as days since 1970.
+            # Query exact anniversaries, skipping years without February 29.
+            days = []
+            for year in range(anniversary.year - 1, anniversary.year - 121, -1):
+                try:
+                    past = anniversary.replace(year=year)
+                except ValueError:
+                    continue
+                days.append((past - date(1970, 1, 1)).days)
+        else:
+            days = await self.day_ids()
         seen = set()
-        for start in range(0, len(days), 16):
-            batch = ",".join(str(day) for day in days[start:start + 16])
-            for row in await self._rows(f"days/{batch}"):
+        batch_size = 120 if anniversary is not None else 16
+        for start in range(0, len(days), batch_size):
+            batch = days[start:start + batch_size]
+            if anniversary is not None:
+                rows = await self._rows("days", day_ids=batch)
+            else:
+                rows = await self._rows("days/" + ",".join(map(str, batch)))
+            for row in rows:
                 if row.get("isvideo") or not str(row.get("mimetype", "")).startswith("image/"):
                     continue
                 file_id = int(row["fileid"])
