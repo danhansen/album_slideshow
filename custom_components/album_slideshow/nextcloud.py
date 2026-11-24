@@ -291,6 +291,10 @@ class MemoriesClient(NextcloudClient):
                        if day_ids is None else
                        session.post(url, json={"dayIds": day_ids}, headers=headers, allow_redirects=False))
             async with request as response:
+                if 300 <= response.status < 400:
+                    from aiohttp import ClientResponseError
+
+                    raise ClientResponseError(response.request_info, response.history, status=response.status)
                 response.raise_for_status()
                 rows = await response.json()
         if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):

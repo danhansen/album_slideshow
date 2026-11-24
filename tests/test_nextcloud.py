@@ -385,3 +385,33 @@ def test_memories_setup_discovers_sources_after_login(monkeypatch):
         entry = asyncio.run(flow.async_step_memories_source({"memories_source": source}))
         assert entry["data"]["memories_source"] == source
         assert entry["data"][cf.CONF_ALBUM_NAME] == entry["title"]
+
+
+def test_memories_setup_reports_which_request_failed(monkeypatch):
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from aiohttp import ClientResponseError
+    from custom_components.album_slideshow import config_flow as cf
+
+    flow = cf.ConfigFlow()
+    flow.hass = object()
+    flow.async_show_form = lambda **kwargs: kwargs
+    credentials = {
+        cf.CONF_NEXTCLOUD_URL: "https://cloud.example.com",
+        cf.CONF_NEXTCLOUD_USERNAME: "alice", cf.CONF_NEXTCLOUD_PASSWORD: "app",
+    }
+    from types import SimpleNamespace
+    request = SimpleNamespace(real_url="https://cloud.example.com")
+    for method, status, key, stage in [
+        ("day_ids", 401, "memories_denied", "timeline"),
+        ("day_ids", 302, "memories_redirect", "timeline"),
+        ("albums", 500, "memories_http", "albums"),
+    ]:
+        monkeypatch.setattr(nc.MemoriesClient, "day_ids", AsyncMock(return_value=[]))
+        monkeypatch.setattr(nc.MemoriesClient, method, AsyncMock(
+            side_effect=ClientResponseError(request, (), status=status),
+        ))
+        form = asyncio.run(flow.async_step_nextcloud_memories(credentials))
+        assert form["errors"] == {"base": key}
+        assert form["description_placeholders"] == {"stage": stage, "detail": f"HTTP {status}"}

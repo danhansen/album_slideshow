@@ -5,6 +5,7 @@ import logging
 import re
 from typing import Any
 
+import aiohttp
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
@@ -175,6 +176,26 @@ def _describe_error(err: BaseException) -> str:
     status = getattr(err, "status", None)
     detail = str(err) or type(err).__name__
     return f"HTTP {status}: {detail}" if status else f"{type(err).__name__}: {detail}"
+
+
+def _memories_error_key(err: Exception) -> str:
+    if isinstance(err, aiohttp.ContentTypeError):
+        return "memories_response"
+    if isinstance(err, aiohttp.ClientResponseError):
+        if err.status in (401, 403):
+            return "memories_denied"
+        if err.status == 404:
+            return "memories_missing"
+        if 300 <= err.status < 400:
+            return "memories_redirect"
+        return "memories_http"
+    if isinstance(err, aiohttp.ClientSSLError):
+        return "memories_tls"
+    if isinstance(err, TimeoutError):
+        return "memories_timeout"
+    if isinstance(err, (aiohttp.InvalidURL, aiohttp.ClientConnectionError)):
+        return "memories_unreachable"
+    return "memories_response"
 
 
 def _redact_token(token: str | None) -> str:
@@ -1338,18 +1359,25 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         from . import nextcloud as nc_api
 
         errors = {}
+        placeholders = {}
         if user_input is not None:
             url = nc_api.normalize_base_url(user_input[CONF_NEXTCLOUD_URL])
             username = user_input[CONF_NEXTCLOUD_USERNAME].strip()
             client = nc_api.MemoriesClient(
                 self.hass, url, username, user_input[CONF_NEXTCLOUD_PASSWORD], ""
             )
+            stage = "timeline"
             try:
                 await client.day_ids()
+                stage = "albums"
                 albums = await client.albums()
             except Exception as err:
                 _LOGGER.warning("Memories discovery failed: %s", _describe_error(err))
-                errors["base"] = "nextcloud_cannot_connect"
+                errors["base"] = _memories_error_key(err)
+                placeholders = {
+                    "stage": stage,
+                    "detail": f"HTTP {err.status}" if getattr(err, "status", None) else type(err).__name__,
+                }
             else:
                 self._memories_connection = {**user_input, CONF_NEXTCLOUD_URL: url,
                                              CONF_NEXTCLOUD_USERNAME: username}
@@ -1360,6 +1388,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 })
                 return await self.async_step_memories_source()
         return self.async_show_form(step_id="nextcloud_memories", errors=errors,
+            description_placeholders=placeholders,
             data_schema=vol.Schema({
                 vol.Required(CONF_NEXTCLOUD_URL): str,
                 vol.Required(CONF_NEXTCLOUD_USERNAME): str,
