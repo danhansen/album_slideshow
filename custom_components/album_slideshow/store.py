@@ -101,6 +101,7 @@ class SlideshowStore:
     face_debug: bool = False
 
     ken_burns: bool = False
+    ken_burns_fps: int = 30
 
     # In-memory last rendered frame. Not user-configurable; used to re-serve
     # the previous slide instantly across a camera reload.

@@ -79,7 +79,6 @@ _PAIR_UNSHOWN_SCAN = 2000
 _PAIRED_MEMORY = 64
 
 _MAX_RENDER_ATTEMPTS = 10
-_MOTION_FPS = 12
 
 # How long a render waits for an item's metadata (faces for the crop,
 # caption fields) to be fetched on demand before rendering without it.
@@ -423,7 +422,7 @@ class AlbumSlideshowCamera(Camera):
         self._motion_id = -1
         self._motion_source = None
         self._motion_jpeg = None
-        self._motion_tick = -1
+        self._motion_progress = -1.0
         self._motion_time = 0.0
         self._motion_elapsed = 0.0
         self._framebuffer: bytes | None = None
@@ -1017,18 +1016,20 @@ class AlbumSlideshowCamera(Camera):
                 self._motion_source = await self.hass.async_add_executor_job(ip.motion_source, data)
                 self._motion_id = frame_id
                 self._motion_elapsed = 0.0
-                self._motion_tick = -1
+                self._motion_progress = -1.0
             elif not self.store.paused:
                 self._motion_elapsed += now - self._motion_time
             self._motion_time = now
 
-            ticks = max(1, int(self.store.slide_interval * _MOTION_FPS))
-            tick = min(ticks, int(self._motion_elapsed * _MOTION_FPS))
-            if self._motion_tick != tick:
+            fps = self.store.ken_burns_fps
+            ticks = max(1, int(self.store.slide_interval * fps))
+            tick = min(ticks, int(self._motion_elapsed * fps))
+            progress = tick / ticks
+            if self._motion_progress != progress:
                 self._motion_jpeg = await self.hass.async_add_executor_job(
-                    ip.ken_burns_frame, self._motion_source, tick / ticks, frame_id,
+                    ip.ken_burns_frame, self._motion_source, progress, frame_id,
                 )
-                self._motion_tick = tick
+                self._motion_progress = progress
             return self._motion_jpeg if frame_id == self._frame_id else self._framebuffer
 
     def _clear_motion(self) -> None:
@@ -1044,7 +1045,7 @@ class AlbumSlideshowCamera(Camera):
 
         async def image():
             nonlocal last_fetch
-            interval = 1 / _MOTION_FPS if self.store.ken_burns else self.frame_interval
+            interval = 1 / self.store.ken_burns_fps if self.store.ken_burns else self.frame_interval
             delay = last_fetch + interval - time.monotonic()
             if delay > 0:
                 await asyncio.sleep(delay)

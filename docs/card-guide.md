@@ -23,7 +23,8 @@ camera_view: live
 
 Replace the example entity with your slideshow camera. Photos slowly pan
 diagonally and alternate between zooming in and out. Pausing the slideshow
-holds the motion. Home Assistant renders up to 12 frames per second with a
+holds the motion. Set **Ken Burns target FPS** to 15, 30 (default), or 60. The setting applies
+to open live streams. Higher rates require more CPU and bandwidth. Frames have a
 maximum long edge of 1280 pixels while a live viewer is connected. Snapshot
 views and the custom slideshow card continue to use the original stills.
 

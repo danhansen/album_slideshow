@@ -13,7 +13,7 @@ def test_live_camera_motion_toggle_pause_navigation_and_disconnect(monkeypatch):
     cam.entry = SimpleNamespace(entry_id="album")
     unsubscribe = Mock()
     cam._viewers = SimpleNamespace(async_add_stream=lambda entry_id: unsubscribe)
-    cam.store = SimpleNamespace(ken_burns=False, paused=False, slide_interval=10, pause_when_unwatched=False)
+    cam.store = SimpleNamespace(ken_burns=False, ken_burns_fps=30, paused=False, slide_interval=10, pause_when_unwatched=False)
     cam.frame_interval = 0.5
     cam.content_type = "image/jpeg"
     cam._last_video = None
@@ -47,6 +47,18 @@ def test_live_camera_motion_toggle_pause_navigation_and_disconnect(monkeypatch):
             assert image.size == (1280, 720)
             assert image.format == "JPEG"
         assert await cam.async_camera_image() is cam._framebuffer
+        delays = []
+
+        async def sleep(delay):
+            nonlocal now
+            delays.append(delay)
+            now += delay
+
+        monkeypatch.setattr(camera.asyncio, "sleep", sleep)
+        for fps in (15, 60, 30):
+            cam.store.ken_burns_fps = fps
+            moving = await fetch()
+            assert abs(delays[-1] - 1 / fps) < 1e-9
         assert decoded.call_count == 1
         cam.store.paused = True
         now += 1
