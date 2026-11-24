@@ -794,7 +794,7 @@ def _history_cam(names="abcd"):
 def test_every_store_setting_is_classified_for_history():
     keeps_history = {
         "slide_interval", "refresh_hours", "image_cache_mb", "navigation_buffer_size",
-        "video_max_seconds", "paused", "pause_when_unwatched", "last_frame", "hidden_photo_ids",
+        "ken_burns", "video_max_seconds", "paused", "pause_when_unwatched", "last_frame", "hidden_photo_ids",
         "last_hidden_photo_ids", "_hidden_storage", "_hidden_lock", "_listeners",
         "resume_point", "settings_restored", "_position_storage", "_position_data",
     }

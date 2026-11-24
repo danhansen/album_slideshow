@@ -78,6 +78,7 @@ _PAIR_UNSHOWN_SCAN = 2000
 _PAIRED_MEMORY = 64
 
 _MAX_RENDER_ATTEMPTS = 10
+_MOTION_FPS = 12
 
 # How long a render waits for an item's metadata (faces for the crop,
 # caption fields) to be fetched on demand before rendering without it.
@@ -416,6 +417,14 @@ class AlbumSlideshowCamera(Camera):
         # by any store change or coordinator update.
         self._effective_cache: tuple[int, list[MediaItem]] | None = None
 
+        self._motion_viewers = 0
+        self._motion_lock = asyncio.Lock()
+        self._motion_id = -1
+        self._motion_source = None
+        self._motion_jpeg = None
+        self._motion_tick = -1
+        self._motion_time = 0.0
+        self._motion_elapsed = 0.0
         self._framebuffer: bytes | None = None
 
         # Monotonic counter incremented every time a new still is committed.
@@ -989,38 +998,62 @@ class AlbumSlideshowCamera(Camera):
     async def async_camera_image(self, width: int | None = None, height: int | None = None) -> bytes | None:
         return self._framebuffer
 
+    async def _live_image(self) -> bytes | None:
+        async with self._motion_lock:
+            data = self._framebuffer
+            if not self.store.ken_burns or not data or self._last_video or self._current_frame is None:
+                self._clear_motion()
+                return data
+
+            frame_id = self._frame_id
+            now = time.monotonic()
+            if self._motion_id != frame_id:
+                self._motion_source = await self.hass.async_add_executor_job(ip.motion_source, data)
+                self._motion_id = frame_id
+                self._motion_elapsed = 0.0
+                self._motion_tick = -1
+            elif not self.store.paused:
+                self._motion_elapsed += now - self._motion_time
+            self._motion_time = now
+
+            ticks = max(1, int(self.store.slide_interval * _MOTION_FPS))
+            tick = min(ticks, int(self._motion_elapsed * _MOTION_FPS))
+            if self._motion_tick != tick:
+                self._motion_jpeg = await self.hass.async_add_executor_job(
+                    ip.ken_burns_frame, self._motion_source, tick / ticks, frame_id,
+                )
+                self._motion_tick = tick
+            return self._motion_jpeg if frame_id == self._frame_id else self._framebuffer
+
+    def _clear_motion(self) -> None:
+        self._motion_id = -1
+        self._motion_source = None
+        self._motion_jpeg = None
+
     async def handle_async_mjpeg_stream(self, request):
-        """Serve the current slide as MJPEG for Home Assistant core surfaces.
-
-        This is what the more-info dialog and picture-glance live view use
-        (the camera advertises no live stream, so the frontend falls back to
-        ``/api/camera_proxy_stream``). We delegate to HA's still-stream
-        helper, which polls ``async_camera_image`` at ``frame_interval`` and
-        writes a correct multipart response.
-
-        Crucially it emits frames *continuously* rather than only on slide
-        change. A browser parsing ``multipart/x-mixed-replace`` holds the
-        current part until the next boundary arrives, so a stream that sent
-        one frame and then went quiet until the next slide (potentially many
-        seconds away, or never while paused) left the more-info view blank.
-        Polling keeps a boundary coming right away, so the current frame
-        renders immediately.
-        """
-        # Imported lazily so the module still loads in test environments
-        # that stub out homeassistant.
+        """Serve the live camera, sharing animated frames across viewers."""
         from homeassistant.components.camera import async_get_still_stream
 
-        # Someone is watching the stream, so "Pause when not viewed" holds off.
+        last_fetch = 0.0
+
+        async def image():
+            nonlocal last_fetch
+            interval = 1 / _MOTION_FPS if self.store.ken_burns else self.frame_interval
+            delay = last_fetch + interval - time.monotonic()
+            if delay > 0:
+                await asyncio.sleep(delay)
+            last_fetch = time.monotonic()
+            return await self._live_image()
+
         close = self._viewers.async_add_stream(self.entry.entry_id)
+        self._motion_viewers += 1
         try:
-            return await async_get_still_stream(
-                request,
-                self.async_camera_image,
-                self.content_type,
-                self.frame_interval,
-            )
+            return await async_get_still_stream(request, image, self.content_type, 0)
         finally:
             close()
+            self._motion_viewers -= 1
+            if not self._motion_viewers:
+                self._clear_motion()
 
     # Older HA cores may dispatch via the alt name; alias for compatibility.
     async def async_handle_async_mjpeg_stream(self, request):

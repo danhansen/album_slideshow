@@ -238,6 +238,28 @@ def render_pair_photo(
                 return encode_image(rendered)
 
 
+def motion_source(data: bytes) -> Image.Image:
+    """Decode once per slide and bound the live stream's working resolution."""
+    with Image.open(io.BytesIO(data)) as image:
+        image.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
+        return image.convert("RGB")
+
+
+def ken_burns_frame(image: Image.Image, progress: float, direction: int) -> bytes:
+    """Follow a gentle diagonal pan with an alternating zoom in or out."""
+    width, height = image.size
+    smooth = progress * progress * (3 - 2 * progress)
+    zoom = 1.03 + 0.12 * (1 - smooth if direction % 2 else smooth)
+    dx, dy = width - width / zoom, height - height / zoom
+    left = dx * (smooth if direction % 2 else 1 - smooth)
+    top = dy * (smooth if direction % 4 < 2 else 1 - smooth)
+    box = (left, top, left + width / zoom, top + height / zoom)
+    with image.resize(image.size, Image.Resampling.BILINEAR, box=box) as frame:
+        out = io.BytesIO()
+        frame.save(out, "JPEG", quality=82)
+        return out.getvalue()
+
+
 def encode_image(img: Image.Image) -> bytes:
     """Encode a PIL image to a client-compatible JPEG or PNG.
 

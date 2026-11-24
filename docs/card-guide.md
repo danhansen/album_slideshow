@@ -9,6 +9,24 @@
 - [Multiple captions and clocks](#multiple-captions-and-clocks)
 - [Full-screen dashboard example](#full-screen-dashboard-example)
 
+## Ken Burns motion in the live camera
+
+Open the slideshow device in **Settings → Devices & services → Album Slideshow Camera**
+and turn on **Ken Burns camera motion**. Use the slideshow camera in your
+screensaver’s live camera view. For a standard Home Assistant dashboard:
+
+```yaml
+type: picture-entity
+entity: camera.album_slideshow_living_room
+camera_view: live
+```
+
+Replace the example entity with your slideshow camera. Photos slowly pan
+diagonally and alternate between zooming in and out. Pausing the slideshow
+holds the motion. Home Assistant renders up to 12 frames per second with a
+maximum long edge of 1280 pixels while a live viewer is connected. Snapshot
+views and the custom slideshow card continue to use the original stills.
+
 ## Add the Card
 
 The integration ships with a custom Lovelace card that does the slide-to-slide

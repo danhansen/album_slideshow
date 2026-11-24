@@ -17,6 +17,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         PauseSwitch(entry, store),
         PauseWhenUnwatchedSwitch(entry, store),
         CropDebugSwitch(entry, store),
+        KenBurnsSwitch(entry, store),
     ])
 
 
@@ -144,3 +145,33 @@ class CropDebugSwitch(SwitchEntity, RestoreEntity):
         if old is not None and old.state in ("on", "off"):
             self.store.face_debug = old.state == "on"
             self.store.notify()
+
+class KenBurnsSwitch(SwitchEntity, RestoreEntity):
+    """Animate photos in the live camera stream."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_name = "Ken Burns camera motion"
+    _attr_icon = "mdi:pan"
+
+    def __init__(self, entry: ConfigEntry, store: SlideshowStore) -> None:
+        self.store = store
+        self._attr_unique_id = f"{entry.entry_id}_ken_burns"
+        self._attr_device_info = {"identifiers": {(DOMAIN, entry.entry_id)}}
+
+    @property
+    def is_on(self) -> bool:
+        return self.store.ken_burns
+
+    async def async_turn_on(self, **kwargs) -> None:
+        self.store.ken_burns = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        self.store.ken_burns = False
+        self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        old = await self.async_get_last_state()
+        self.store.ken_burns = old is not None and old.state == "on"
