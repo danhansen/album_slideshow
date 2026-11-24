@@ -175,6 +175,16 @@
           "nextcloud_url": "Album share link",
           "nextcloud_image_size": "Image quality"
         }
+      },
+      "nextcloud_memories": {
+        "title": "Nextcloud Memories timeline",
+        "description": "Use the indexed photo timeline for this account. Enter your Nextcloud server URL and an app password.",
+        "data": {
+          "album_name": "Album name",
+          "nextcloud_url": "Server URL",
+          "nextcloud_username": "Username",
+          "nextcloud_password": "App password"
+        }
       }
     },
     "error": {

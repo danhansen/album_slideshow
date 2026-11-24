@@ -89,6 +89,7 @@ from .const import (
     CONF_NEXTCLOUD_IMAGE_SIZE,
     CONF_NEXTCLOUD_SHARE_TOKEN,
     CONF_NEXTCLOUD_AUTH_MODE,
+    NEXTCLOUD_AUTH_MODE_MEMORIES,
     NEXTCLOUD_AUTH_MODE_PUBLIC,
     DEFAULT_NEXTCLOUD_AUTH_MODE,
     DEFAULT_NEXTCLOUD_IMAGE_SIZE,
@@ -2478,7 +2479,31 @@ class AlbumCoordinator(DataUpdateCoordinator):
         )
         if mode == NEXTCLOUD_AUTH_MODE_PUBLIC:
             return await self._update_nextcloud_public()
+        if mode == NEXTCLOUD_AUTH_MODE_MEMORIES:
+            return await self._update_nextcloud_memories()
         return await self._update_nextcloud_folder()
+
+    async def _update_nextcloud_memories(self) -> dict[str, Any]:
+        from . import nextcloud as nc_api
+
+        data = self.entry.data
+        client = nc_api.MemoriesClient(self.hass, data[CONF_NEXTCLOUD_URL],
+            data[CONF_NEXTCLOUD_USERNAME], data[CONF_NEXTCLOUD_PASSWORD], "")
+        items = []
+        try:
+            async for row in client.timeline():
+                file_id = int(row["fileid"])
+                items.append(MediaItem(
+                    url=nc_api.build_preview_url(client.base_url, file_id, NEXTCLOUD_PREVIEW_PX),
+                    width=row.get("w"), height=row.get("h"), mime_type="image/jpeg",
+                    filename=row.get("basename"), source_id=str(file_id),
+                    captured_at=int(row["epoch"]) * 1000 if row.get("epoch") is not None else None,
+                    byte_size=row.get("size"), exif_scanned=True,
+                ))
+        except Exception as err:
+            raise UpdateFailed(f"Error listing Nextcloud Memories: {err}") from err
+        self.image_request_headers = dict(client.image_headers)
+        return {"title": self.entry.title, "items": items}
 
     def _ente_share(self):
         """Rebuild the parsed share (token + collection key) from entry data."""

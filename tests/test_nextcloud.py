@@ -292,3 +292,33 @@ def test_parse_propfind_display_name_falls_back_to_filename():
 def test_propfind_body_requests_original_name():
     assert b"<nc:original-name/>" in nc._PROPFIND_BODY
     assert b'xmlns:nc="http://nextcloud.org/ns"' in nc._PROPFIND_BODY
+
+
+def test_memories_private_timeline(monkeypatch):
+    import asyncio
+    from aiohttp import ClientSession, web
+    from aiohttp.test_utils import TestServer
+
+    async def run():
+        routes = web.RouteTableDef()
+
+        @routes.get("/cloud/index.php/apps/memories/api/days")
+        async def days(request):
+            assert request.headers["Authorization"] == nc.basic_auth_header("alice", "app")
+            assert request.headers["OCS-APIRequest"] == "true"
+            assert request.query["nopreload"] == "1"
+            return web.json_response([{"dayid": 10}, {"dayid": 9}])
+
+        @routes.get("/cloud/index.php/apps/memories/api/days/10,9")
+        async def photos(request):
+            picture = {"fileid": 3, "mimetype": "image/jpeg", "epoch": 900000}
+            return web.json_response([picture, {"fileid": 4, "isvideo": 1}, picture])
+
+        app = web.Application()
+        app.add_routes(routes)
+        async with TestServer(app) as server, ClientSession() as session:
+            monkeypatch.setattr(nc, "async_get_clientsession", lambda hass: session)
+            client = nc.MemoriesClient(None, str(server.make_url("/cloud")), "alice", "app", "")
+            assert [row["fileid"] async for row in client.timeline()] == [3]
+
+    asyncio.run(run())

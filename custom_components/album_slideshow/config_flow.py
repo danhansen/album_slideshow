@@ -96,6 +96,7 @@ from .const import (
     CONF_NEXTCLOUD_SHARE_TOKEN,
     CONF_NEXTCLOUD_AUTH_MODE,
     NEXTCLOUD_AUTH_MODE_FOLDER,
+    NEXTCLOUD_AUTH_MODE_MEMORIES,
     NEXTCLOUD_AUTH_MODE_PUBLIC,
     DEFAULT_NEXTCLOUD_AUTH_MODE,
     DEFAULT_NEXTCLOUD_IMAGE_SIZE,
@@ -489,7 +490,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     PROVIDER_PHOTOPRISM: "PhotoPrism (direct API, full metadata)",
                     PROVIDER_ICLOUD: "iCloud Shared Album",
                     PROVIDER_SYNOLOGY: "Synology Photos (direct API, full metadata)",
-                    PROVIDER_NEXTCLOUD: "Nextcloud (WebDAV folder or public album link)",
+                    PROVIDER_NEXTCLOUD: "Nextcloud (folder, Memories timeline or public album)",
                     PROVIDER_ENTE: "Ente Photos (public album link)",
                     PROVIDER_UGREEN: "UGREEN NAS (UGOS Photos, experimental)",
                     PROVIDER_MEDIA_SOURCE: "Media Source (any source, no metadata)",
@@ -1309,6 +1310,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             if user_input[CONF_NEXTCLOUD_AUTH_MODE] == NEXTCLOUD_AUTH_MODE_PUBLIC:
                 return await self.async_step_nextcloud_public()
+            if user_input[CONF_NEXTCLOUD_AUTH_MODE] == NEXTCLOUD_AUTH_MODE_MEMORIES:
+                return await self.async_step_nextcloud_memories()
             return await self.async_step_nextcloud_folder()
 
         schema = vol.Schema(
@@ -1318,12 +1321,50 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): vol.In(
                     {
                         NEXTCLOUD_AUTH_MODE_FOLDER: "Authenticated WebDAV folder",
+                        NEXTCLOUD_AUTH_MODE_MEMORIES: "Memories timeline",
                         NEXTCLOUD_AUTH_MODE_PUBLIC: "Public album link",
                     }
                 ),
             }
         )
         return self.async_show_form(step_id="nextcloud", data_schema=schema)
+
+    async def async_step_nextcloud_memories(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        from . import nextcloud as nc_api
+
+        errors = {}
+        if user_input is not None:
+            name = user_input[CONF_ALBUM_NAME].strip()
+            url = nc_api.normalize_base_url(user_input[CONF_NEXTCLOUD_URL])
+            username = user_input[CONF_NEXTCLOUD_USERNAME].strip()
+            client = nc_api.MemoriesClient(
+                self.hass, url, username, user_input[CONF_NEXTCLOUD_PASSWORD], ""
+            )
+            try:
+                await client.day_ids()
+            except Exception as err:
+                _LOGGER.warning("Memories timeline validation failed: %s", _describe_error(err))
+                errors["base"] = "nextcloud_cannot_connect"
+            else:
+                await self.async_set_unique_id(f"{DOMAIN}:memories:{url}:{username}:{name}")
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(title=name, data={
+                    **user_input, CONF_ALBUM_NAME: name, CONF_NEXTCLOUD_URL: url,
+                    CONF_NEXTCLOUD_USERNAME: username, CONF_PROVIDER: PROVIDER_NEXTCLOUD,
+                    CONF_NEXTCLOUD_AUTH_MODE: NEXTCLOUD_AUTH_MODE_MEMORIES,
+                })
+        return self.async_show_form(step_id="nextcloud_memories", errors=errors,
+            data_schema=vol.Schema({
+                vol.Required(CONF_ALBUM_NAME): str,
+                vol.Required(CONF_NEXTCLOUD_URL): str,
+                vol.Required(CONF_NEXTCLOUD_USERNAME): str,
+                vol.Required(CONF_NEXTCLOUD_PASSWORD): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                ),
+            }),
+        )
 
     async def async_step_nextcloud_folder(
         self, user_input: dict[str, Any] | None = None

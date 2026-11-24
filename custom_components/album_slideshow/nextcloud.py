@@ -278,6 +278,41 @@ class NextcloudClient:
         return parse_propfind_response(xml_text, self.dav_root)[:_MAX_ASSETS]
 
 
+class MemoriesClient(NextcloudClient):
+    """Read the account's indexed timeline using its Nextcloud app password."""
+
+    async def _rows(self, path: str) -> list[dict[str, Any]]:
+        session = async_get_clientsession(self.hass)
+        url = f"{self.base_url}/index.php/apps/memories/api/{path}"
+        headers = {**self.image_headers, "OCS-APIRequest": "true", "Accept": "application/json"}
+        async with async_timeout.timeout(_TIMEOUT):
+            async with session.get(url, headers=headers, allow_redirects=False) as response:
+                response.raise_for_status()
+                rows = await response.json()
+        if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+            raise ValueError("Unexpected Memories timeline response")
+        return rows
+
+    async def day_ids(self) -> list[int]:
+        return [int(row["dayid"]) for row in await self._rows("days?nopreload=1")]
+
+    async def timeline(self):
+        days = await self.day_ids()
+        seen = set()
+        for start in range(0, len(days), 16):
+            batch = ",".join(str(day) for day in days[start:start + 16])
+            for row in await self._rows(f"days/{batch}"):
+                if row.get("isvideo") or not str(row.get("mimetype", "")).startswith("image/"):
+                    continue
+                file_id = int(row["fileid"])
+                if file_id in seen:
+                    continue
+                seen.add(file_id)
+                yield row
+                if len(seen) >= _MAX_ASSETS:
+                    return
+
+
 # ── Public album link mode ──────────────────────────────────────────────────
 #
 # Talks to the same ``photospublic`` WebDAV collection the Nextcloud Photos

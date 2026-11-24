@@ -120,6 +120,7 @@ ENRICHING_PROVIDERS = (
 #   server checks against the unauthenticated ``photospublic`` WebDAV
 #   collection.
 CONF_NEXTCLOUD_AUTH_MODE = "nextcloud_auth_mode"
+NEXTCLOUD_AUTH_MODE_MEMORIES = "memories"
 NEXTCLOUD_AUTH_MODE_FOLDER = "folder"
 NEXTCLOUD_AUTH_MODE_PUBLIC = "public_link"
 DEFAULT_NEXTCLOUD_AUTH_MODE = NEXTCLOUD_AUTH_MODE_FOLDER

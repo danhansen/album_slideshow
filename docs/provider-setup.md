@@ -750,3 +750,12 @@ NAS running UGOS / UGOS Pro, for capture date and (when present) GPS location.
 > **Use a dedicated account.** Create a separate UGOS account for Home
 > Assistant and either create the album with that account or share an
 > existing album with it, rather than using your own admin/personal login.
+
+### Authenticated Memories timeline
+
+In the Nextcloud setup choose **Memories timeline**, then enter your Nextcloud
+server URL (including any installation subdirectory), username and app password.
+The camera uses Nextcloud previews of still photos from the account's indexed
+Memories timeline. Refreshes list timeline days and fetch their metadata in
+batches, up to 20,000 photos. The slideshow's date filters use the capture times
+returned by Memories. This source skips videos and does not scan originals for EXIF.
