@@ -177,13 +177,19 @@
         }
       },
       "nextcloud_memories": {
-        "title": "Nextcloud Memories timeline",
-        "description": "Use the indexed photo timeline for this account. Enter your Nextcloud server URL and an app password.",
+        "title": "Connect to Nextcloud Memories",
+        "description": "Enter your Nextcloud server URL, username, and app password to discover slideshow sources.",
         "data": {
-          "album_name": "Album name",
           "nextcloud_url": "Server URL",
           "nextcloud_username": "Username",
           "nextcloud_password": "App password"
+        }
+      },
+      "memories_source": {
+        "title": "Choose your Memories slideshow",
+        "description": "Select your full timeline, photos from this day in previous years, or an accessible album.",
+        "data": {
+          "memories_source": "Photo source"
         }
       }
     },

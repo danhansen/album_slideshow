@@ -2511,7 +2511,9 @@ class AlbumCoordinator(DataUpdateCoordinator):
         items = []
         try:
             today = datetime.now(dt_util.DEFAULT_TIME_ZONE).date() if self.memories_anniversary else None
-            async for row in client.timeline(today):
+            source = data.get("memories_source", "timeline")
+            album = source.removeprefix("album:") if source.startswith("album:") else None
+            async for row in client.timeline(today, album):
                 file_id = int(row["fileid"])
                 items.append(MediaItem(
                     url=nc_api.build_preview_url(client.base_url, file_id, NEXTCLOUD_PREVIEW_PX),

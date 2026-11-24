@@ -297,10 +297,23 @@ class MemoriesClient(NextcloudClient):
             raise ValueError("Unexpected Memories timeline response")
         return rows
 
-    async def day_ids(self) -> list[int]:
-        return [int(row["dayid"]) for row in await self._rows("days?nopreload=1")]
+    async def albums(self) -> list[dict[str, Any]]:
+        from aiohttp import ClientResponseError
 
-    async def timeline(self, anniversary: date | None = None):
+        try:
+            return await self._rows("clusters/albums")
+        except ClientResponseError as err:
+            if err.status in (404, 412):  # Photos albums unavailable on this server
+                return []
+            raise
+
+    async def day_ids(self, album: str | None = None) -> list[int]:
+        path = "days?nopreload=1"
+        if album:
+            path += "&albums=" + quote(album, safe="")
+        return [int(row["dayid"]) for row in await self._rows(path)]
+
+    async def timeline(self, anniversary: date | None = None, album: str | None = None):
         if anniversary is not None:
             # Memories day IDs encode the calendar date as days since 1970.
             # Query exact anniversaries, skipping years without February 29.
@@ -312,15 +325,17 @@ class MemoriesClient(NextcloudClient):
                     continue
                 days.append((past - date(1970, 1, 1)).days)
         else:
-            days = await self.day_ids()
+            days = await self.day_ids(album)
+        album_query = "?albums=" + quote(album, safe="") if album else ""
         seen = set()
         batch_size = 120 if anniversary is not None else 16
         for start in range(0, len(days), batch_size):
             batch = days[start:start + batch_size]
             if anniversary is not None:
-                rows = await self._rows("days", day_ids=batch)
+                rows = await self._rows("days" + album_query, day_ids=batch)
             else:
-                rows = await self._rows("days/" + ",".join(map(str, batch)))
+                path = "days/" + ",".join(map(str, batch))
+                rows = await self._rows(path + album_query)
             for row in rows:
                 if row.get("isvideo") or not str(row.get("mimetype", "")).startswith("image/"):
                     continue

@@ -476,6 +476,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady("Could not load hidden photos; slideshow has not started") from err
     await store.async_load_position(hass, entry.entry_id)
     store.settings_restored = asyncio.Event()
+    if entry.data.get("memories_source") == "on_this_day":
+        store.date_filter = "on_this_day"
     coordinator = AlbumCoordinator(hass, entry, store)
     await coordinator.async_config_entry_first_refresh()
     from .const import CONF_NEXTCLOUD_AUTH_MODE, NEXTCLOUD_AUTH_MODE_MEMORIES

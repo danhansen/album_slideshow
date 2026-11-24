@@ -340,3 +340,48 @@ def test_memories_anniversary_queries_only_prior_matching_days(monkeypatch):
     async def run():
         assert [r["fileid"] async for r in client.timeline(date(2024, 2, 29))] == [4]
     asyncio.run(run())
+
+
+def test_memories_album_queries_keep_album_scope(monkeypatch):
+    import asyncio
+    from unittest.mock import AsyncMock, call
+
+    client = nc.MemoriesClient(None, "https://cloud.example.com", "alice", "app", "")
+    rows = AsyncMock(side_effect=[[{"dayid": 42}], [{"fileid": 3, "mimetype": "image/jpeg"}]])
+    monkeypatch.setattr(client, "_rows", rows)
+
+    async def run():
+        assert [r["fileid"] async for r in client.timeline(album="alice/Kids & pets")] == [3]
+
+    asyncio.run(run())
+    assert rows.await_args_list == [
+        call("days?nopreload=1&albums=alice%2FKids%20%26%20pets"),
+        call("days/42?albums=alice%2FKids%20%26%20pets"),
+    ]
+
+
+def test_memories_setup_discovers_sources_after_login(monkeypatch):
+    import asyncio
+    from unittest.mock import AsyncMock
+    from custom_components.album_slideshow import config_flow as cf
+
+    flow = cf.ConfigFlow()
+    flow.hass = object()
+    flow.async_show_form = lambda **kwargs: kwargs
+    flow.async_create_entry = lambda **kwargs: kwargs
+    flow.async_set_unique_id = AsyncMock()
+    flow._abort_if_unique_id_configured = lambda: None
+    monkeypatch.setattr(nc.MemoriesClient, "day_ids", AsyncMock(return_value=[]))
+    monkeypatch.setattr(nc.MemoriesClient, "albums", AsyncMock(return_value=[
+        {"cluster_id": "alice/Kids", "name": "Kids", "user": "alice"},
+    ]))
+    credentials = {
+        cf.CONF_NEXTCLOUD_URL: "https://cloud.example.com/",
+        cf.CONF_NEXTCLOUD_USERNAME: "alice", cf.CONF_NEXTCLOUD_PASSWORD: "app",
+    }
+    result = asyncio.run(flow.async_step_nextcloud_memories(credentials))
+    assert result["step_id"] == "memories_source"
+    for source in ["timeline", "on_this_day", "album:alice/Kids"]:
+        entry = asyncio.run(flow.async_step_memories_source({"memories_source": source}))
+        assert entry["data"]["memories_source"] == source
+        assert entry["data"][cf.CONF_ALBUM_NAME] == entry["title"]

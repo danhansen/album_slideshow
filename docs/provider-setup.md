@@ -751,18 +751,16 @@ NAS running UGOS / UGOS Pro, for capture date and (when present) GPS location.
 > Assistant and either create the album with that account or share an
 > existing album with it, rather than using your own admin/personal login.
 
-### Authenticated Memories timeline
+### Nextcloud Memories
 
-In the Nextcloud setup choose **Memories timeline**, then enter your Nextcloud
-server URL (including any installation subdirectory), username and app password.
-The camera uses Nextcloud previews of still photos from the account's indexed
-Memories timeline. Refreshes list timeline days and fetch their metadata in
-batches, up to 20,000 photos. The slideshow's date filters use the capture times
-returned by Memories. This source skips videos and does not scan originals for EXIF.
+Choose **Nextcloud Memories** and enter the server URL (including any installation
+subdirectory), username and Nextcloud app password. Once connected, choose
+**Full timeline**, **On this day**, or an album returned by Memories. The
+integration names the camera from your selection.
 
-For a daily anniversary slideshow set the camera's **Date filter** to
-**on_this_day**. In Memories timeline mode this requests still photos directly
-from the Memories days API for the same month and day in the previous 120
-years. The date follows Home Assistant's time zone and refreshes at midnight.
-No matching photos means an empty playlist for that date. Switch the filter
-back to **off** to restore the full timeline.
+**On this day** requests still photos taken on today's month and day in the
+previous 120 years. The date follows Home Assistant's time zone and refreshes
+at midnight. A day without matches has an empty playlist.
+
+The camera uses Nextcloud previews and reads capture times directly from
+Memories. Each refresh loads up to 20,000 still photos.
